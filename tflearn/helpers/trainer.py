@@ -166,7 +166,7 @@ class Trainer(object):
                     self.session.run(tf.variables_initializer(
                         tf.get_collection_ref('is_training')))
                 except Exception as e:
-                    init = tf.initialize_all_variables()
+                    init = tf.global_variables_initializer()
                 self.session.run(init)
             # Fix for re-using sessions
             #initialize_uninit_variables(self.session)

@@ -6,6 +6,7 @@ import numpy as np
 from math import ceil
 
 import tflearn
+from .convolutions import convolutions
 from .. import variables as vs
 from .. import activations
 from .. import initializations
@@ -18,7 +19,7 @@ def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
             activation='linear', bias=True, weights_init='uniform_scaling',
             bias_init='zeros', regularizer=None, weight_decay=0.001,
             trainable=True, restore=True, reuse=False, scope=None,
-            name="Conv2D"):
+            name="Conv2D", conv='conv2d'):
     """ Convolution 2D.
 
     Input:
@@ -55,6 +56,7 @@ def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
             used to share variables between layers. Note that scope will
             override name.
         name: A name for this layer (optional). Default: 'Conv2D'.
+	conv2d: `str` specifies convolution typee
 
     Attributes:
         scope: `Scope`. This layer scope.
@@ -62,6 +64,7 @@ def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
         b: `Variable`. Variable representing biases.
 
     """
+    convolve = convolutions[conv]
     input_shape = utils.get_incoming_shape(incoming)
     assert len(input_shape) == 4, "Incoming Tensor shape must be 4-D"
     filter_size = utils.autoformat_filter_conv2d(filter_size,
@@ -96,7 +99,7 @@ def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
             # Track per layer variables
             tf.add_to_collection(tf.GraphKeys.LAYER_VARIABLES + '/' + name, b)
 
-        inference = tf.nn.conv2d(incoming, W, strides, padding)
+        inference = convolve(incoming, W, strides, padding)
         if b: inference = tf.nn.bias_add(inference, b)
 
         if activation:
@@ -1346,7 +1349,7 @@ def residual_block(incoming, nb_blocks, out_channels, downsample=False,
                    bias=True, weights_init='variance_scaling',
                    bias_init='zeros', regularizer='L2', weight_decay=0.0001,
                    trainable=True, restore=True, reuse=False, scope=None,
-                   name="ResidualBlock"):
+                   name="ResidualBlock", conv='conv2d'):
     """ Residual Block.
 
     A residual block as described in MSRA's Deep Residual Network paper.
@@ -1425,7 +1428,7 @@ def residual_block(incoming, nb_blocks, out_channels, downsample=False,
                              downsample_strides, 'same', 'linear',
                              bias, weights_init, bias_init,
                              regularizer, weight_decay, trainable,
-                             restore)
+                             restore, conv=conv)
 
             if batch_norm:
                 resnet = tflearn.batch_normalization(resnet)
@@ -1434,7 +1437,7 @@ def residual_block(incoming, nb_blocks, out_channels, downsample=False,
             resnet = conv_2d(resnet, out_channels, 3, 1, 'same',
                              'linear', bias, weights_init,
                              bias_init, regularizer, weight_decay,
-                             trainable, restore)
+                             trainable, restore, conv=conv)
 
             # Downsampling
             if downsample_strides > 1:

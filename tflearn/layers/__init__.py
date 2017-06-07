@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from .convolutions import convolutions
 from .conv import conv_2d, max_pool_2d, avg_pool_2d, conv_1d, \
     max_pool_1d, avg_pool_1d, residual_block, residual_bottleneck, \
     highway_conv_1d, highway_conv_2d, upsample_2d, conv_3d, max_pool_3d, \
