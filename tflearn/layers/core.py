@@ -12,6 +12,7 @@ from tflearn import variables as va
 from tflearn import activations
 from tflearn import initializations
 from tflearn import losses
+from .conv import conv_2d
 
 
 def input_data(shape=None, placeholder=None, dtype=tf.float32,
@@ -97,7 +98,7 @@ def fully_connected(incoming, n_units, activation='linear', bias=True,
                     weights_init='truncated_normal', bias_init='zeros',
                     regularizer=None, weight_decay=0.001, trainable=True,
                     restore=True, reuse=False, scope=None,
-                    name="FullyConnected"):
+                    name="FullyConnected", binarize=None):
     """ Fully Connected.
 
     A fully connected layer.
@@ -131,6 +132,7 @@ def fully_connected(incoming, n_units, activation='linear', bias=True,
             used to share variables between layers. Note that scope will
             override name.
         name: A name for this layer (optional). Default: 'FullyConnected'.
+        binarize: `str`. Binarized fully connected layer using binary convolution
 
     Attributes:
         scope: `Scope`. This layer scope.
@@ -140,6 +142,21 @@ def fully_connected(incoming, n_units, activation='linear', bias=True,
     """
     input_shape = utils.get_incoming_shape(incoming)
     assert len(input_shape) > 1, "Incoming Tensor shape must be at least 2-D"
+
+    if binarize:
+        if len(input_shape) == 2:
+            incoming = tf.reshape(incoming, [-1, 1, 1] + [input_shape[-1]])
+        kernel = incoming.get_shape().as_list()[1:3]
+
+        inference = conv_2d(incoming, n_units, kernel, padding='valid',
+                            activation=activation, bias=bias, weights_init=weights_init,
+                            bias_init=bias_init, regularizer=regularizer,
+                            weight_decay=weight_decay, trainable=trainable,
+                            restore=restore, reuse=reuse, scope=scope, name=name,
+                            binarize=binarize)
+        inference = tf.reshape(inference, [-1, n_units])
+        return inference
+
     n_inputs = int(np.prod(input_shape[1:]))
 
     with tf.variable_scope(scope, default_name=name, values=[incoming],
