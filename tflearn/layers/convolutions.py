@@ -1,43 +1,46 @@
 import tensorflow as tf
+import numpy as np
 
-def conv2d(x, filter, strides=[1,1,1,1], padding='SAME'):
-    return tf.nn.conv2d(x, filter, strides=strides, padding=padding)
+def alpha(weights):
+    w_shape = tf.shape(weights)
+    n = tf.cast(tf.reduce_prod(w_shape[:-1]),tf.float32)
+    w_abs = tf.abs(weights)
+    a = tf.reduce_sum(w_abs, [0,1,2]) / n
+    return tf.stop_gradient(a)
 
-def conv_bin_activ(x, filter, strides=[1,1,1,1], padding='SAME'):
+def gamma(inp, weights, strides, padding):
+    inp_shape = inp.get_shape().as_list()
+    w_shape = weights.get_shape().as_list()
+
+    A = tf.reduce_sum(tf.abs(inp), [3]) / inp_shape[3]
+    A = tf.reshape(A, [-1] + inp_shape[1:3] + [1])
+
+    k = tf.ones(w_shape[:2] + [1,1], dtype=tf.float32) / (w_shape[0]*w_shape[1])
+    
+    K = conv2d(A, k, strides, padding)
+    a = alpha(weights)
+    return tf.stop_gradient(K*a)
+
+def conv2d(inp, weights, strides=[1,1,1,1], padding='SAME'):
+    return tf.nn.conv2d(inp, weights, strides=strides, padding=padding)
+
+def conv_bin_activ(inp, weights, strides=[1,1,1,1], padding='SAME'):
+    g = gamma(inp, weights, strides, padding)
     G = tf.get_default_graph()
     with G.gradient_override_map({"Sign": "Identity"}):
-    	w_shape = tf.shape(filter)
-    	n = tf.cast(tf.reduce_prod(w_shape[0:-1]),tf.float32) 
-    	abs = tf.abs(filter)
-    	a = tf.stop_gradient(tf.reduce_sum(abs, [0,1,2])/n)  
-    	absX = tf.abs(x)
-    	k = tf.ones(w_shape, dtype=tf.float32) / n
-    	K = conv2d(absX, k, strides, padding)
-    	x_sign = tf.sign(x)
-    	w_sign = tf.sign(filter/a) 
-    	return conv2d(x_sign, w_sign, strides, padding)*a*K
+        x_sign = tf.sign(inp)
+        w_sign = tf.sign(weights) 
+    return conv2d(x_sign, w_sign, strides, padding) * g
 
-def conv_bin_weights_vector(x, filter, strides=[1,1,1,1], padding='SAME'):
+def conv_bin_weights(inp, weights, strides=[1,1,1,1], padding='SAME'):
+    a = alpha(weights)
     G = tf.get_default_graph()
     with G.gradient_override_map({"Sign": "Identity"}):
-        w_shape = tf.shape(filter)
-        n = tf.cast(tf.reduce_prod(w_shape[0:-1]),tf.float32) 
-        abs = tf.abs(filter)
-        a = tf.stop_gradient(tf.reduce_sum(abs, [0,1,2])/n)
-        return conv2d(x, tf.sign(filter/a), strides, padding)*a
-
-def conv_bin_weights_scalar(x, filter, strides=[1,1,1,1], padding='SAME'):
-    G = tf.get_default_graph()
-    with G.gradient_override_map({"Sign": "Identity"}):
-        w_shape = tf.shape(filter)
-        n = tf.cast(tf.reduce_prod(w_shape),tf.float32) 
-        abs = tf.abs(filter)
-        a = tf.stop_gradient(tf.reduce_sum(abs, [0,1,2,3])/n)
-        return conv2d(x, tf.sign(filter/a), strides, padding)*a
+        w_sign = tf.sign(weights)
+    return conv2d(inp, w_sign, strides, padding)*a
 
 convolutions = {
-    'conv2d': conv2d,
-    'conv_bin_activ': conv_bin_activ,
-    'conv_bin_weights_vector': conv_bin_weights_vector,
-    'conv_bin_weights_scalar': conv_bin_weights_scalar,
+    None: conv2d,
+    'weights': conv_bin_weights,
+    'full': conv_bin_activ,
 }

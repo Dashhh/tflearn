@@ -14,12 +14,11 @@ from .. import losses
 from .. import utils
 from ..layers.normalization import batch_normalization
 
-
 def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
             activation='linear', bias=True, weights_init='uniform_scaling',
             bias_init='zeros', regularizer=None, weight_decay=0.001,
             trainable=True, restore=True, reuse=False, scope=None,
-            name="Conv2D", conv='conv2d'):
+            name="Conv2D", binarize=None):
     """ Convolution 2D.
 
     Input:
@@ -56,7 +55,7 @@ def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
             used to share variables between layers. Note that scope will
             override name.
         name: A name for this layer (optional). Default: 'Conv2D'.
-	conv2d: `str` specifies convolution typee
+	binarize: `str` specifies convolution typee
 
     Attributes:
         scope: `Scope`. This layer scope.
@@ -64,7 +63,7 @@ def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
         b: `Variable`. Variable representing biases.
 
     """
-    convolve = convolutions[conv]
+    convolve = convolutions[binarize]
     input_shape = utils.get_incoming_shape(incoming)
     assert len(input_shape) == 4, "Incoming Tensor shape must be 4-D"
     filter_size = utils.autoformat_filter_conv2d(filter_size,
@@ -99,6 +98,15 @@ def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
             # Track per layer variables
             tf.add_to_collection(tf.GraphKeys.LAYER_VARIABLES + '/' + name, b)
 
+        if activation and binarize == 'full':
+            if isinstance(activation, str):
+                incoming = activations.get(activation)(incoming)
+            elif hasattr(activation, '__call__'):
+                incoming = activation(incoming)
+            else:
+                raise ValueError("Invalid Activation.")
+            activation = None
+
         inference = convolve(incoming, W, strides, padding)
         if b: inference = tf.nn.bias_add(inference, b)
 
@@ -112,6 +120,7 @@ def conv_2d(incoming, nb_filter, filter_size, strides=1, padding='same',
 
         # Track activations.
         tf.add_to_collection(tf.GraphKeys.ACTIVATIONS, inference)
+
 
     # Add attributes to Tensor to easy access weights.
     inference.scope = scope
@@ -1349,7 +1358,7 @@ def residual_block(incoming, nb_blocks, out_channels, downsample=False,
                    bias=True, weights_init='variance_scaling',
                    bias_init='zeros', regularizer='L2', weight_decay=0.0001,
                    trainable=True, restore=True, reuse=False, scope=None,
-                   name="ResidualBlock", conv='conv2d'):
+                   name="ResidualBlock", binarize=None):
     """ Residual Block.
 
     A residual block as described in MSRA's Deep Residual Network paper.
@@ -1425,19 +1434,19 @@ def residual_block(incoming, nb_blocks, out_channels, downsample=False,
             resnet = tflearn.activation(resnet, activation)
 
             resnet = conv_2d(resnet, out_channels, 3,
-                             downsample_strides, 'same', 'linear',
+                             downsample_strides, 'same', None,
                              bias, weights_init, bias_init,
                              regularizer, weight_decay, trainable,
-                             restore, conv=conv)
+                             restore, binarize=binarize)
 
             if batch_norm:
                 resnet = tflearn.batch_normalization(resnet)
             resnet = tflearn.activation(resnet, activation)
 
             resnet = conv_2d(resnet, out_channels, 3, 1, 'same',
-                             'linear', bias, weights_init,
+                             None, bias, weights_init,
                              bias_init, regularizer, weight_decay,
-                             trainable, restore, conv=conv)
+                             trainable, restore, binarize=binarize)
 
             # Downsampling
             if downsample_strides > 1:
